@@ -203,7 +203,6 @@ def tidal_search(session, query, exact=False):
     if exact:
         results = list(_get_exact_result(query, tuple(results), field_meta))
 
-    _expand_results_tracks(results)
     for i, field_type in enumerate(
         (SearchField.ARTIST, SearchField.ALBUM, SearchField.TITLE)
     ):
