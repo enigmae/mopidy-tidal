@@ -40,6 +40,18 @@ class Extension(ext.Extension):
             optional=True, choices=range(8000, 9000)
         )
         schema["auth_token"] = config.String(optional=True)
+        # Token refresh configuration
+        schema["token_refresh_enabled"] = config.Boolean(optional=True)
+        schema["token_refresh_check_interval"] = config.Integer(optional=True)
+        schema["token_refresh_threshold"] = config.Float(optional=True)
+        schema["source_id"] = config.String(optional=True)
+        schema["auth_logging_enabled"] = config.Boolean(optional=True)
+
+        # External credential API integration (for systems with centralized credential management)
+        schema["credential_api_url"] = config.String(optional=True)
+        schema["credential_api_auth_user"] = config.String(optional=True)
+        schema["credential_api_auth_pass"] = config.Secret(optional=True)
+
         return schema
 
     def setup(self, registry):
