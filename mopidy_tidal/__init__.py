@@ -40,6 +40,7 @@ class Extension(ext.Extension):
             optional=True, choices=range(8000, 9000)
         )
         schema["auth_token"] = config.String(optional=True)
+        schema["source_id"] = config.String(optional=True)
         return schema
 
     def setup(self, registry):
