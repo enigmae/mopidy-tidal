@@ -218,6 +218,10 @@ class TidalBackend(ThreadingActor, backend.Backend):
         if self.auth_token:
             logger.info("Using provided PKCE access token")
             try:
+                # FIX: Set is_pkce BEFORE process_auth_token to ensure token refresh
+                # uses correct PKCE credentials if access token is expired.
+                # (tidalapi bug: process_auth_token sets is_pkce AFTER API calls)
+                self._active_session.is_pkce = self.pkce_enabled
                 self._active_session.process_auth_token(self.auth_token)
                 self._complete_login()
             except Exception as exc:
@@ -293,6 +297,9 @@ class TidalBackend(ThreadingActor, backend.Backend):
                 json: Dict[
                     str, Union[str, int]
                 ] = self._active_session.pkce_get_auth_token(url_redirect)
+                # FIX: Set is_pkce BEFORE process_auth_token to ensure token refresh
+                # uses correct PKCE credentials. (tidalapi bug workaround)
+                self._active_session.is_pkce = True
                 # Parse and set tokens.
                 self._active_session.process_auth_token(json, is_pkce_token=True)
                 self._logged_in = True
