@@ -47,3 +47,12 @@ class Extension(ext.Extension):
         from .backend import TidalBackend
 
         registry.add("backend", TidalBackend)
+
+        from .http import TidalRpcHandler
+        
+        registry.add('http:app', {
+            'name': 'tidal',
+            'factory': lambda config, core: [
+                (r'/rpc', TidalRpcHandler, {'core': core}),
+            ],
+        })
