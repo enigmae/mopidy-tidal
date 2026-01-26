@@ -16,7 +16,6 @@ from mopidy_tidal.playlists import (
 
 @pytest.fixture
 def tpp(mocker):
-    mocker.patch("mopidy_tidal.playlists.Timer")
     backend = mocker.Mock()
     backend._config = {"tidal": {"playlist_cache_refresh_secs": 0}}
 
@@ -31,7 +30,10 @@ def test_create(tpp, mocker):
     playlist.tracks.__name__ = "tracks"
     playlist.tracks.return_value = []
     playlist.name = "playlist name"
+    playlist.num_tracks = 0
     backend.session.user.create_playlist.return_value = playlist
+    # Also mock session.playlist() for the refresh call
+    backend.session.playlist.return_value = playlist
     p = tpp.create("playlist")
     assert p == MopidyPlaylist(
         last_modified=9, name="playlist name", uri="tidal:playlist:17"
@@ -105,10 +107,11 @@ def test_save_no_changes(tpp, mocker, tidal_playlists):
     session = backend.session
     tidal_pl = tidal_playlists[0]
     uri = tidal_pl.uri
+    tracks_list = tidal_pl.tracks()  # Call to get the list
     mopidy_pl = mocker.Mock(
         uri=uri,
         last_modified=10,
-        tracks=tidal_pl.tracks,
+        tracks=tracks_list,
     )
     mopidy_pl.name = tidal_pl.name
     session.playlist.return_value = tidal_pl
@@ -204,7 +207,7 @@ def test_refresh_metadata(tpp, mocker, tidal_playlists):
     tpp, backend = tpp
     tpp._current_tidal_playlists = tidal_playlists
     assert not len(tpp._playlists_metadata)
-    tpp.refresh(include_items=False)
+    tpp.refresh(metadata_only=True)
 
     listener.send.assert_called_once_with("playlists_loaded")
 
@@ -245,7 +248,7 @@ def api_test(tpp, mocker, api_method, tp):
     api_method.return_value = tracks
     api_method.__name__ = "get_playlist_tracks"
 
-    tpp.refresh(include_items=True)
+    tpp.refresh()
     listener.send.assert_called_once_with("playlists_loaded")
     assert len(tpp._playlists) == 1
     playlist = tpp._playlists["tidal:playlist:1-1-1"]
@@ -301,6 +304,10 @@ def test_prevent_duplicate_playlist_sync(tpp, mocker, tidal_playlists):
 
 
 def test_playlist_sync_downtime(mocker, tidal_playlists, config):
+    """Test that periodic refresh updates the playlist cache.
+
+    This tests the PeriodicThread-based refresh mechanism.
+    """
     backend = mocker.Mock()
     tpp = TidalPlaylistsProvider(backend)
     tpp._playlists = PlaylistCache(persist=False)
@@ -309,23 +316,39 @@ def test_playlist_sync_downtime(mocker, tidal_playlists, config):
 
     backend.session.configure_mock(**{"user.favorites.playlists": tidal_playlists[:1]})
     backend.session.user.playlists.return_value = tidal_playlists[1:]
+
+    # Initial as_list populates metadata cache
     tpp.as_list()
+
+    # Add a new playlist to the mock data
     p = mocker.Mock(spec=TidalPlaylist, session=mocker.Mock, playlist_id="2")
     p.id = p.playlist_id
     p.num_tracks = 2
     p.name = "Playlist-2"
     p.last_updated = 10
     backend.session.user.playlists.return_value.append(p)
+
+    # as_list is read-only, so it won't see the new playlist yet
     assert tpp.as_list() == [
         Ref(name="Playlist-101", type="playlist", uri="tidal:playlist:101"),
         Ref(name="Playlist-222", type="playlist", uri="tidal:playlist:222"),
     ]
-    sleep(0.1)
+
+    # Start the periodic refresh thread
+    tpp.start_periodic_refresh()
+
+    # Wait for periodic refresh to run
+    sleep(0.15)
+
+    # Now as_list should see the new playlist
     assert tpp.as_list() == [
         Ref(name="Playlist-101", type="playlist", uri="tidal:playlist:101"),
         Ref(name="Playlist-2", type="playlist", uri="tidal:playlist:2"),
         Ref(name="Playlist-222", type="playlist", uri="tidal:playlist:222"),
     ]
+
+    # Clean up
+    tpp.stop_periodic_refresh()
 
 
 def test_update_changes(tpp, mocker, tidal_playlists):

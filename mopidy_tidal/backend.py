@@ -209,6 +209,9 @@ class TidalBackend(ThreadingActor, backend.Backend):
         else:
             logger.info("[TIDAL BACKEND] Not using OAuth/PKCE or not logged in - token refresh not applicable")
 
+        # Start playlist periodic refresh if configured
+        self.playlists.start_periodic_refresh()
+
         logger.info("[TIDAL BACKEND] Backend initialization complete")
         logger.info("=" * 80)
 
@@ -350,6 +353,9 @@ class TidalBackend(ThreadingActor, backend.Backend):
 
         # Stop token refresh thread
         self._stop_token_refresh_thread()
+
+        # Stop playlist periodic refresh thread
+        self.playlists.stop_periodic_refresh()
 
         logger.info("[TIDAL BACKEND] ✓ Tidal backend stopped")
 
