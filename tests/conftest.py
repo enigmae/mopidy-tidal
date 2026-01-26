@@ -242,15 +242,18 @@ def tidal_tracks(tidal_artists, tidal_albums):
 
 
 def make_playlist(playlist_id, tracks):
-    return _make_mock(
+    mock = _make_mock(
         mock=Mock(spec=UserPlaylist, session=Mock()),
         name=f"Playlist-{playlist_id}",
         id=str(playlist_id),
         uri=f"tidal:playlist:{playlist_id}",
-        tracks=tracks,
         num_tracks=len(tracks),
         last_updated=10,
     )
+    # tracks should be a callable for get_items() pagination support
+    mock.tracks = Mock(return_value=tracks)
+    mock.tracks.__name__ = "tracks"
+    return mock
 
 
 @pytest.fixture
